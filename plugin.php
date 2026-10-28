@@ -99,6 +99,60 @@ class Boilerplate extends Plugin {
 	}
 
 	/**
+	 * Install plugin
+	 *
+	 * Essentially the same as the parent method
+	 * except that it allows for array field values.
+	 *
+	 * This is implemented to handle multi-checkbox
+	 * and radio button fields.
+	 *
+	 * @since  1.0.0
+	 * @access public
+	 * @param  integer $position
+	 * @return boolean Return true if the installation is successful.
+	 */
+	public function install( $position = 1 ) {
+
+		// Create plugin directory for the database.
+		mkdir( PATH_PLUGINS_DATABASES . $this->directoryName, DIR_PERMISSIONS, true );
+
+		$this->dbFields['position'] = $position;
+
+		// Sanitize default values to store in the file.
+		foreach ( $this->dbFields as $key => $value ) {
+
+			if ( is_array( $value ) ) {
+				$array_fields = [];
+				foreach ( $value as $array_field ) {
+					if ( is_int( $array_field ) ) {
+						$array_field = Sanitize :: int( $array_field );
+					} elseif ( is_string( $array_field ) ) {
+						$array_field = Sanitize :: html( $array_field );
+					}
+					$array_fields[] = $array_field;
+				}
+				$value = $array_fields;
+			} elseif ( is_int( $value ) ) {
+				$value = Sanitize :: int( $value );
+			} else {
+				$value = Sanitize :: html( $value );
+			}
+
+			settype( $value, gettype( $this->dbFields[$key] ) );
+			$this->db[$key] = $value;
+		}
+
+		$storage = PATH_CONTENT . $this->storage_root . DS;
+		if ( ! file_exists( $storage ) ) {
+			Filesystem :: mkdir( $storage, true );
+		}
+
+		// Create the database.
+		return $this->save();
+	}
+
+	/**
 	 * Admin settings form
 	 *
 	 * @since  1.0.0
@@ -113,6 +167,64 @@ class Boilerplate extends Plugin {
 		$html .= ob_get_clean();
 
 		return $html;
+	}
+
+	/**
+	 * Form post
+	 *
+	 * The form `$_POST` method.
+	 *
+	 * Essentially the same as the parent method
+	 * except that it allows for array field values.
+	 *
+	 * This is implemented to handle multi-checkbox
+	 * and radio button fields.
+	 *
+	 * @since  1.0.0
+	 * @access public
+	 * @return void
+	 */
+	public function post() {
+
+		$args = $_POST;
+
+		foreach ( $this->dbFields as $field => $value ) {
+			if ( isset( $args[$field] ) ) {
+
+				// Array fields.
+				if ( is_array( $args[$field] ) ) {
+					$array_fields = [];
+					foreach ( $args[$field] as $array_field ) {
+						if ( is_int( $array_field ) ) {
+							$array_field = Sanitize :: int( $array_field );
+						} elseif ( is_string( $array_field ) ) {
+							$array_field = Sanitize :: html( $array_field );
+						}
+						$array_fields[] = $array_field;
+					}
+					$value = $array_fields;
+
+				// Integer fields.
+				} elseif ( is_int( $args[$field] ) ) {
+					$value = Sanitize :: int( $args[$field] );
+
+				// String fields.
+				} else {
+					$value = Sanitize :: html( $args[$field] );
+				}
+
+				// Convert true/false strings to boolean.
+				if ( 'false' === $value ) {
+					$value = false;
+				} elseif ( 'true' === $value ) {
+					$value = true;
+				}
+
+				settype( $value, gettype( $value ) );
+				$this->db[$field] = $value;
+			}
+		}
+		return $this->save();
 	}
 
 	/**
